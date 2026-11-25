@@ -1,0 +1,38 @@
+# Alternativa a los LaunchAgents: corre en GitHub aunque la Mac esté dormida.
+# Requiere repo PRIVADO y los secrets IG_ACCESS_TOKEN e IG_USER_ID en Settings → Secrets → Actions.
+# Ojo: GitHub Actions no garantiza puntualidad exacta en los cron; puede demorar varios minutos.
+name: Publicar reels de prueba
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # cada 10 minutos (UTC)
+    - cron: "0 12 * * *"     # 09:00 Buenos Aires = 12:00 UTC → reporte
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Crear .env desde secrets
+        run: |
+          printf 'IG_ACCESS_TOKEN=%s\nIG_USER_ID=%s\n' "${{ secrets.IG_ACCESS_TOKEN }}" "${{ secrets.IG_USER_ID }}" > .env
+      - name: Publicar lo que corresponda
+        if: github.event.schedule != '0 12 * * *'
+        run: python3 publish.py
+      - name: Reporte diario
+        if: github.event.schedule == '0 12 * * *'
+        run: python3 report.py
+      - name: Guardar calendario actualizado
+        run: |
+          git config user.name "liso-bot"
+          git config user.email "bot@getliso.com.ar"
+          git add calendario.csv
+          git diff --cached --quiet || git commit -m "calendario: actualización automática"
+          git push
